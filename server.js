@@ -58,17 +58,31 @@ async function sendTelegramMessage(chatId, text) {
 }
 
 // ── Format message from form fields ──────────────────────────────────────────
-// Fully dynamic — reads every field by its name= attribute automatically.
-// Add any new input to your HTML form and it will appear in the Telegram message.
+// Known fields are grouped into neat sections.
+// Any NEW field you add to the HTML form is auto-caught at the bottom
+// under "Extra Details" — no server changes needed, ever.
 
-// Fields to skip from the Telegram message (internal/hidden control fields)
-const SKIP_FIELDS = new Set(["admin_id"]);
+const KNOWN_FIELDS = new Set([
+  "selected_platform", "boost_type",
+  "full_name", "email", "username", "profile_url", "country",
+  "boost_amount", "boost_amount_range", "delivery_speed", "account_type", "notes",
+  "agree_terms", "agree_notify", "admin_id",
+]);
 
-// Make a field name human-readable: "full_name" → "Full Name"
+const SKIP_FIELDS = new Set(["admin_id", "boost_amount_range"]);
+
+const SPEED_MAP = {
+  instant: "⚡ Instant (1–3 mins)",
+  fast:    "🚀 Fast (1–6 hours)",
+  gradual: "📈 Gradual (1–3 days)",
+};
+
 function formatFieldName(key) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function val(v, fallback = "—") {
+  return v && v.toString().trim() ? v.toString().trim() : fallback;
 }
 
 function buildMessage(body) {
@@ -78,15 +92,38 @@ function buildMessage(body) {
     `🚀 <b>NEW BOOSTMASS SUBMISSION</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
+    `📱 <b>Platform:</b> ${val(body.selected_platform)}`,
+    `🎯 <b>Boost Type:</b> ${val(body.boost_type)}`,
+    ``,
+    `👤 <b>ACCOUNT DETAILS</b>`,
+    `• <b>Full Name:</b> ${val(body.full_name)}`,
+    `• <b>Email:</b> ${val(body.email)}`,
+    `• <b>Username:</b> ${val(body.username)}`,
+    `• <b>Profile URL:</b> ${val(body.profile_url, "Not provided")}`,
+    `• <b>Country:</b> ${val(body.country)}`,
+    `• <b>Account Type:</b> ${val(body.account_type)}`,
+    ``,
+    `📊 <b>BOOST CONFIG</b>`,
+    `• <b>Amount:</b> ${body.boost_amount ? Number(body.boost_amount).toLocaleString() : "—"}`,
+    `• <b>Speed:</b> ${SPEED_MAP[body.delivery_speed] || val(body.delivery_speed)}`,
+    ``,
+    `📝 <b>Notes:</b> ${val(body.notes, "None")}`,
+    ``,
+    `✅ <b>Agreed to Terms:</b> ${body.agree_terms === "yes" ? "Yes" : "No"}`,
+    `🔔 <b>Email Updates:</b> ${body.agree_notify === "yes" ? "Yes" : "No"}`,
   ];
 
-  for (const [key, value] of Object.entries(body)) {
-    // Skip internal fields
-    if (SKIP_FIELDS.has(key)) continue;
+  // ── Auto-catch any extra fields not in the known list ──
+  const extraEntries = Object.entries(body).filter(
+    ([key]) => !KNOWN_FIELDS.has(key) && !SKIP_FIELDS.has(key)
+  );
 
-    const label = formatFieldName(key);
-    const val = value && value.toString().trim() ? value : "—";
-    lines.push(`• <b>${label}:</b> ${val}`);
+  if (extraEntries.length > 0) {
+    lines.push(``);
+    lines.push(`➕ <b>EXTRA DETAILS</b>`);
+    for (const [key, value] of extraEntries) {
+      lines.push(`• <b>${formatFieldName(key)}:</b> ${val(value)}`);
+    }
   }
 
   lines.push(``);
