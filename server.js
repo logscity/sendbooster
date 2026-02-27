@@ -58,58 +58,40 @@ async function sendTelegramMessage(chatId, text) {
 }
 
 // ── Format message from form fields ──────────────────────────────────────────
+// Fully dynamic — reads every field by its name= attribute automatically.
+// Add any new input to your HTML form and it will appear in the Telegram message.
+
+// Fields to skip from the Telegram message (internal/hidden control fields)
+const SKIP_FIELDS = new Set(["admin_id"]);
+
+// Make a field name human-readable: "full_name" → "Full Name"
+function formatFieldName(key) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function buildMessage(body) {
-  const {
-    selected_platform,
-    boost_type,
-    full_name,
-    email,
-    username,
-    profile_url,
-    country,
-    boost_amount,
-    delivery_speed,
-    account_type,
-    notes,
-    agree_terms,
-    agree_notify,
-  } = body;
-
   const now = new Date().toUTCString();
-
-  const speedMap = {
-    instant: "⚡ Instant (1–3 mins)",
-    fast: "🚀 Fast (1–6 hours)",
-    gradual: "📈 Gradual (1–3 days)",
-  };
 
   const lines = [
     `🚀 <b>NEW BOOSTMASS SUBMISSION</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
-    `📱 <b>Platform:</b> ${selected_platform || "N/A"}`,
-    `🎯 <b>Boost Type:</b> ${boost_type || "N/A"}`,
-    ``,
-    `👤 <b>ACCOUNT DETAILS</b>`,
-    `• Full Name:   ${full_name || "N/A"}`,
-    `• Email:       ${email || "N/A"}`,
-    `• Username:    ${username || "N/A"}`,
-    `• Profile URL: ${profile_url || "Not provided"}`,
-    `• Country:     ${country || "N/A"}`,
-    `• Acct Type:   ${account_type || "N/A"}`,
-    ``,
-    `📊 <b>BOOST CONFIG</b>`,
-    `• Amount:   ${Number(boost_amount).toLocaleString() || "N/A"}`,
-    `• Speed:    ${speedMap[delivery_speed] || delivery_speed || "N/A"}`,
-    ``,
-    `📝 <b>Notes:</b> ${notes || "None"}`,
-    ``,
-    `✅ Agreed to Terms: ${agree_terms === "yes" ? "Yes" : "No"}`,
-    `🔔 Email Updates: ${agree_notify === "yes" ? "Yes" : "No"}`,
-    ``,
-    `🕐 <b>Submitted:</b> ${now}`,
-    `━━━━━━━━━━━━━━━━━━━━━━`,
   ];
+
+  for (const [key, value] of Object.entries(body)) {
+    // Skip internal fields
+    if (SKIP_FIELDS.has(key)) continue;
+
+    const label = formatFieldName(key);
+    const val = value && value.toString().trim() ? value : "—";
+    lines.push(`• <b>${label}:</b> ${val}`);
+  }
+
+  lines.push(``);
+  lines.push(`🕐 <b>Submitted:</b> ${now}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━`);
 
   return lines.join("\n");
 }
