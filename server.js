@@ -59,17 +59,21 @@ async function sendTelegramMessage(chatId, text) {
 
 // ── Format message from form fields ──────────────────────────────────────────
 // Known fields are grouped into neat sections.
-// Any NEW field you add to the HTML form is auto-caught at the bottom
-// under "Extra Details" — no server changes needed, ever.
+// Any NEW field you add to the HTML form is automatically injected
+// into the Account Details section — no server changes needed, ever.
 
+const PLATFORM_FIELDS = new Set(["selected_platform", "boost_type"]);
+const BOOST_FIELDS    = new Set(["boost_amount", "boost_amount_range", "delivery_speed"]);
+const FOOTER_FIELDS   = new Set(["agree_terms", "agree_notify", "notes"]);
+const SKIP_FIELDS     = new Set(["admin_id", "boost_amount_range"]);
+
+// Fields already handled explicitly (won't appear again in the loop)
 const KNOWN_FIELDS = new Set([
   "selected_platform", "boost_type",
-  "full_name", "email", "username", "profile_url", "country",
-  "boost_amount", "boost_amount_range", "delivery_speed", "account_type", "notes",
-  "agree_terms", "agree_notify", "admin_id",
+  "full_name", "email", "username", "profile_url", "country", "account_type",
+  "boost_amount", "boost_amount_range", "delivery_speed",
+  "notes", "agree_terms", "agree_notify", "admin_id",
 ]);
-
-const SKIP_FIELDS = new Set(["admin_id", "boost_amount_range"]);
 
 const SPEED_MAP = {
   instant: "⚡ Instant (1–3 mins)",
@@ -88,6 +92,11 @@ function val(v, fallback = "—") {
 function buildMessage(body) {
   const now = new Date().toUTCString();
 
+  // Collect any extra (unknown) fields the user added to the form
+  const extraEntries = Object.entries(body).filter(
+    ([key]) => !KNOWN_FIELDS.has(key) && !SKIP_FIELDS.has(key)
+  );
+
   const lines = [
     `🚀 <b>NEW BOOSTMASS SUBMISSION</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
@@ -102,6 +111,8 @@ function buildMessage(body) {
     `• <b>Profile URL:</b> ${val(body.profile_url, "Not provided")}`,
     `• <b>Country:</b> ${val(body.country)}`,
     `• <b>Account Type:</b> ${val(body.account_type)}`,
+    // ── Extra fields injected here seamlessly ──
+    ...extraEntries.map(([key, value]) => `• <b>${formatFieldName(key)}:</b> ${val(value)}`),
     ``,
     `📊 <b>BOOST CONFIG</b>`,
     `• <b>Amount:</b> ${body.boost_amount ? Number(body.boost_amount).toLocaleString() : "—"}`,
@@ -111,24 +122,10 @@ function buildMessage(body) {
     ``,
     `✅ <b>Agreed to Terms:</b> ${body.agree_terms === "yes" ? "Yes" : "No"}`,
     `🔔 <b>Email Updates:</b> ${body.agree_notify === "yes" ? "Yes" : "No"}`,
+    ``,
+    `🕐 <b>Submitted:</b> ${now}`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
   ];
-
-  // ── Auto-catch any extra fields not in the known list ──
-  const extraEntries = Object.entries(body).filter(
-    ([key]) => !KNOWN_FIELDS.has(key) && !SKIP_FIELDS.has(key)
-  );
-
-  if (extraEntries.length > 0) {
-    lines.push(``);
-    lines.push(`➕ <b>EXTRA DETAILS</b>`);
-    for (const [key, value] of extraEntries) {
-      lines.push(`• <b>${formatFieldName(key)}:</b> ${val(value)}`);
-    }
-  }
-
-  lines.push(``);
-  lines.push(`🕐 <b>Submitted:</b> ${now}`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━━━`);
 
   return lines.join("\n");
 }
