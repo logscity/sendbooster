@@ -130,16 +130,61 @@ function buildMessage(body) {
   return lines.join("\n");
 }
 
+// ── Premium List Check ────────────────────────────────────────────────────────
+// Fetches your premiumlist.js from GitHub and parses all IDs.
+// Caches the result for 5 minutes to avoid hitting GitHub on every request.
+
+const PREMIUM_LIST_URL = "https://mounazb.github.io/nepy/idash/premiumlist.js";
+let premiumCache = { ids: null, fetchedAt: 0 };
+
+async function getPremiumIds() {
+  const CACHE_MS = 5 * 60 * 1000; // 5 minutes
+  const now = Date.now();
+
+  if (premiumCache.ids && now - premiumCache.fetchedAt < CACHE_MS) {
+    return premiumCache.ids;
+  }
+
+  try {
+    const res = await fetch(PREMIUM_LIST_URL);
+    const text = await res.text();
+
+    // Parse all numbers from the premiumUsers array in the JS file
+    const matches = text.match(/\b\d{7,}\b/g);
+    const ids = matches ? matches.map((id) => id.trim()) : [];
+
+    premiumCache = { ids, fetchedAt: now };
+    console.log(`✅  Loaded ${ids.length} premium IDs from GitHub`);
+    return ids;
+  } catch (err) {
+    console.error("❌  Failed to fetch premiumlist.js:", err.message);
+    // If fetch fails, return cached list if available, else empty
+    return premiumCache.ids || [];
+  }
+}
+
 // ── POST /submit ──────────────────────────────────────────────────────────────
 // The HTML form posts here. The ?admin= query param (or header) sets recipient.
 app.post("/submit", async (req, res) => {
   try {
     // Determine the Telegram recipient
     // Priority: ?admin= query param → req.body.admin_id → DEFAULT_ADMIN
-    const recipientId =
+    const recipientId = (
       req.query.admin ||
       req.body.admin_id ||
-      DEFAULT_ADMIN;
+      DEFAULT_ADMIN
+    ).toString().trim();
+
+    // ── Check if recipientId is in the premium list ──
+    const premiumIds = await getPremiumIds();
+    const isDefaultAdmin = recipientId === DEFAULT_ADMIN.toString();
+    const isPremium = premiumIds.includes(recipientId);
+
+    if (!isDefaultAdmin && !isPremium) {
+      console.warn(`🚫  Blocked non-premium admin ID: ${recipientId}`);
+      // Return success to the user (don't reveal the block)
+      return res.json({ success: true, message: "Boost submitted successfully!" });
+    }
 
     const message = buildMessage(req.body);
 
